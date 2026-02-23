@@ -1,0 +1,19 @@
+# Core numeric / data
+pandas
+numpy
+
+# Config & utilities
+pyyaml
+
+# Broker (Zerodha Kite)
+kiteconnect
+
+# Broker (ICICI Direct Breeze — optional)
+python-dotenv
+breeze-connect
+
+# Persistence (planned)
+sqlalchemy
+
+# Testing
+pytest

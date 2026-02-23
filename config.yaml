@@ -1,0 +1,42 @@
+# [cite_start]Source: [cite: 27-31, 33-36]
+project_name: "Sensex 1-Min Scalper"
+
+account:
+  initial_capital: 500000        # Starting capital (Rs)
+
+risk:
+  max_trades_per_day: 999          # Effective removal as requested
+  max_consecutive_losses: 3
+  daily_loss_limit_pct: 0.03     # 3% of capital
+  risk_per_trade_pct: 0.01       # 1% of capital
+
+trade_params:
+  target_pct: 0.15               # +15% premium target
+  stop_loss_pct: 0.07            # -7% premium stop-loss
+  fixed_qty: 100                 # Fixed quantity for all trades
+
+windows:
+  morning_start: "09:20"
+  morning_end: "10:30"
+  afternoon_start: "13:30"
+  afternoon_end: "14:45"
+
+broker:
+  name: "icici"                   # "kite" or "icici"
+
+  # --- Zerodha Kite (used when name: "kite") ---
+  # Configure these in your .env file as KITE_API_KEY and KITE_ACCESS_TOKEN
+  api_key: ""
+  access_token: ""
+  sensex_symbol_root: "SENSEX"
+  exchange: "BFO"
+  product: "MIS"
+  ticker_tokens: []
+
+  # --- ICICI Direct Breeze (used when name: "icici") ---
+  # Configure these in your .env file as ICICI_API_KEY, ICICI_SECRET_KEY, and ICICI_SESSION_TOKEN
+  icici_api_key: ""
+  icici_secret_key: ""
+  icici_session_token: ""
+  icici_stock_code: "BSESEN"
+  icici_exchange_code: "BSE"
