@@ -1,3 +1,7 @@
+import logging
+import datetime
+from typing import Dict, Any, Optional
+
 from execution.trade_manager import TradeManager
 from risk.risk_engine import RiskEngine
 from risk.position_sizer import PositionSizer
@@ -14,6 +18,17 @@ class DummyBroker:
     def place_order(self, symbol: str, qty: int, order_type: str = "MARKET", transaction_type: str = "BUY") -> str:
         self.orders.append((symbol, qty, order_type, transaction_type))
         return "ORDER123"
+
+
+class DummyLogger:
+    def get_open_trade(self):
+        return None
+
+    def log_entry(self, position, timestamp=None):
+        return 1
+
+    def log_exit(self, trade_id, exit_price, pnl, exit_reason, timestamp=None, exit_params=None):
+        pass
 
 
 class DummyOrderManager:
@@ -58,16 +73,17 @@ def test_trade_manager_entry_and_exit_flow():
     broker = DummyBroker()
     risk_engine = RiskEngine(cfg)
     order_manager = DummyOrderManager(broker)
-    tm = TradeManager(cfg, broker, risk_engine, order_manager)
+    trade_logger = DummyLogger()
+    tm = TradeManager(cfg, broker, risk_engine, order_manager, trade_logger=trade_logger)
 
     candle = {
         "EMA9": 101,
         "EMA21": 100,
-        "VWAP": 100,
         "open": 100,
         "close": 72000,  # spot, used for strike selection
         "low": 71900,
         "high": 72100,
+        "time": datetime.datetime.now(),
     }
 
     # Force a known LTP for the built symbol

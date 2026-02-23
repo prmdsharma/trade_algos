@@ -81,23 +81,23 @@ def test_factory_raises_on_unknown_broker():
 def test_parse_symbol_ce():
     """_parse_symbol should correctly parse a CE option symbol."""
     root, strike, option_type, expiry = ICICIClientLive._parse_symbol(
-        "SENSEX26FEB72000CE"
+        "SENSEX26FEB2672000CE"
     )
-    assert root == "SENSEX"
+    assert root == "BSESEN"
     assert strike == 72000
     assert option_type == "call"
-    assert expiry.startswith("2026-02")
+    assert expiry == "2026-02-26"
 
 
 def test_parse_symbol_pe():
     """_parse_symbol should correctly parse a PE option symbol."""
     root, strike, option_type, expiry = ICICIClientLive._parse_symbol(
-        "SENSEX26MAR65000PE"
+        "SENSEX26MAR2665000PE"
     )
-    assert root == "SENSEX"
+    assert root == "BSESEN"
     assert strike == 65000
     assert option_type == "put"
-    assert expiry.startswith("2026-03")
+    assert expiry == "2026-03-26"
 
 
 def test_parse_symbol_different_months():

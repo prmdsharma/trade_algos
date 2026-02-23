@@ -34,8 +34,8 @@ def test_risk_engine_limits():
     # Under limits initially
     assert engine.can_trade()
 
-    # Hit max trades per day
-    for _ in range(cfg["risk"]["max_trades_per_day"]):
+    # Hit max trades per day - should still be able to trade as this limit was removed
+    for _ in range(cfg["risk"]["max_trades_per_day"] + 1):
         engine.update_metrics(0)
-    assert not engine.can_trade()
+    assert engine.can_trade()
 

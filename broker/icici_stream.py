@@ -60,8 +60,8 @@ def create_icici_stream(config: Dict[str, Any], ws_handler: Any):
                 "volume": int(tick_data.get("ttq", 0)) if tick_data.get("ttq") else 0,
             }
             
-            # Log the tick for visibility in trading.log
-            logger.info(f"Tick received: {tick['time']} | Price: {tick['last_price']} | Vol: {tick['volume']}")
+            # Log the tick for visibility (DEBUG only to avoid noise)
+            logger.debug(f"Tick received: {tick['time']} | Price: {tick['last_price']} | Vol: {tick['volume']}")
             
             # Skeleton expects a single tick dict
             ws_handler.on_tick(tick)

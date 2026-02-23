@@ -82,9 +82,12 @@ class WebSocketHandlerSkeleton:
 
         # When the minute changes, emit the accumulated candle
         if self._current_minute is not None and tick_minute != self._current_minute:
+            # Capture minute change immediately to prevent re-entry from concurrent ticks  
+            self._current_minute = tick_minute
             if len(self.candle_builder._ticks) > 0:
                 candle = self.candle_builder.build_candle()
                 self.on_candle(candle)
+        else:
+            self._current_minute = tick_minute
 
-        self._current_minute = tick_minute
         self.candle_builder.add_tick(tick)

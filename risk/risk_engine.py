@@ -39,6 +39,19 @@ class RiskEngine:
         self.daily_pnl = 0.0
         self.current_date = new_date or get_today_date()
 
+    def recover_metrics(self, stats: dict):
+        """
+        Restore daily metrics from previous run (same day).
+        """
+        self.daily_pnl = float(stats.get("daily_pnl", 0.0))
+        self.trades_today = int(stats.get("trades_today", 0))
+        self.consecutive_losses = int(stats.get("consecutive_losses", 0))
+        print(
+            f"RiskEngine Recovered: PnL={self.daily_pnl:.2f}, "
+            f"Trades={self.trades_today}, "
+            f"ConsecutiveLosses={self.consecutive_losses}"
+        )
+
     def is_trading_window_open(self, candle_time: Optional[datetime.time] = None):
         """
         Checks whether the given time falls within a trading window.

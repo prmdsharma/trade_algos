@@ -113,6 +113,10 @@ class KiteClientStub(BrokerBase):
 
         return float(self._data.iloc[self._idx - 1]["close"])
 
+    def get_historical_data(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
+        """Stub implementation."""
+        return self._data.copy()
+
 class KiteClientLive(BrokerBase):
     """
     Minimal live Kite client wrapper.
@@ -164,6 +168,14 @@ class KiteClientLive(BrokerBase):
         data = self.kite.ltp([f"{exchange}:{symbol}"])
         key = next(iter(data.keys()))
         return data[key]["last_price"]
+
+    def get_historical_data(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
+        """To be implemented if needed for Kite live."""
+        raise NotImplementedError("Historical data not implemented for Kite live yet.")
+
+    def get_historical_data(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
+        """To be implemented if needed for Kite live."""
+        raise NotImplementedError("Historical data not implemented for Kite live yet.")
 
 
 class KiteClientPaper(KiteClientLive):

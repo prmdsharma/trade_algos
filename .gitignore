@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 logs/
-trades.db
+database/trades.db

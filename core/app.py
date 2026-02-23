@@ -1,4 +1,5 @@
 import time
+import threading
 from typing import Dict, Any, List
 
 import pandas as pd
@@ -43,38 +44,97 @@ def _build_on_candle_pipeline(config, broker, logger):
     signal_engine = SignalEngine()
     order_manager = OrderManager(broker)
     trade_manager = TradeManager(config, broker, risk_engine, order_manager)
-
+    
+    lock = threading.Lock()
     candles_history: List[Dict[str, Any]] = []
+
+    # Bootstrap historical data for accurate indicators (EMA9, EMA21)
+    try:
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        # Fetch last 6 hours to ensure we get plenty of data for indicator stability
+        from_date = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        to_date = now.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        
+        # SENSEX index code is BSESEN
+        index_symbol = config.get("strategy", {}).get("index_symbol", "BSESEN")
+        logger.info(f"Bootstrapping historical data for {index_symbol} (last 6 hours)...")
+        
+        hist_data = broker.get_historical_data(
+            symbol=index_symbol,
+            interval="1minute",
+            from_date=from_date,
+            to_date=to_date
+        )
+        
+        if hist_data:
+            # Sort and take last 360 candles for indicator stability
+            hist_data.sort(key=lambda x: x['time'])
+            bootstrap_candles = hist_data[-360:]
+            for c in bootstrap_candles:
+                # Ensure fields are float
+                c['open'] = float(c['open'])
+                c['high'] = float(c['high'])
+                c['low'] = float(c['low'])
+                c['close'] = float(c['close'])
+                c['volume'] = float(c.get('volume', 0))
+                if isinstance(c['time'], str):
+                    c['time'] = pd.to_datetime(c['time'])
+                candles_history.append(c)
+            
+            # Show initial values to user
+            df_boot = pd.DataFrame(candles_history)
+            initial_enriched = indicators.calculate(df_boot)
+            logger.info(f"Bootstrapped {len(candles_history)} historical candles (6 hours).")
+            logger.info(
+                f"Initial Indicators -> EMA9: {initial_enriched['EMA9']:.2f} | "
+                f"EMA21: {initial_enriched['EMA21']:.2f}"
+            )
+        else:
+            logger.warning("No historical data found for bootstrapping. Indicators may be inaccurate initially.")
+    except Exception as e:
+        logger.error(f"Failed to bootstrap historical data: {e}")
 
     def on_candle(candle: Dict[str, Any]) -> None:
         """Called on every completed 1-min candle from the websocket layer."""
-        try:
-            risk_engine.ensure_current_day()
+        with lock:
+            try:
+                risk_engine.ensure_current_day()
 
-            candles_history.append(candle)
-            df = pd.DataFrame(candles_history)
+                # Add new candle to history
+                candles_history.append(candle)
+                df = pd.DataFrame(candles_history)
 
-            if not risk_engine.is_trading_window_open():
-                return
+                # Check window (must be inside lock to keep state consistent)
+                if not risk_engine.is_trading_window_open(candle['time'].time()):
+                    return
 
-            enriched_row = indicators.calculate(df)
-            trade_manager.manage_open_positions(enriched_row)
+                enriched_row = indicators.calculate(df)
+                trade_manager.manage_open_positions(enriched_row)
 
-            if not risk_engine.can_trade():
-                logger.warning("Risk limits breached. No new entries for the day.")
-                return
+                if not risk_engine.can_trade():
+                    logger.warning("Risk limits breached. No new entries for the day.")
+                    return
 
-            signal = signal_engine.analyze(enriched_row)
+                signal = signal_engine.analyze(enriched_row)
 
-            if signal:
-                trade_manager.execute_entry(signal, enriched_row)
-            else:
-                # Provide visibility when waiting
-                if not trade_manager.current_position:
-                    logger.info(f"Signal Search: Spot={candle['close']:.2f} | EMA9={enriched_row['EMA9']:.2f} | EMA21={enriched_row['EMA21']:.2f} | VWAP={enriched_row['VWAP']:.2f} | Waiting for entry...")
+                if signal:
+                    trade_manager.execute_entry(signal, enriched_row)
+                else:
+                    # Provide visibility when waiting - Throttle to every 5 minutes
+                    if not trade_manager.current_position:
+                        current_min = candle['time'].minute
+                        if current_min % 5 == 0:
+                            trend = "BULLISH" if enriched_row['EMA9'] > enriched_row['EMA21'] else "BEARISH"
+                            logger.info(
+                                f"STATUS @ {candle['time'].strftime('%H:%M')} | "
+                                f"Spot: {candle['close']:.2f} | Trend: {trend} | "
+                                f"EMA9: {enriched_row['EMA9']:.2f} | EMA21: {enriched_row['EMA21']:.2f} | "
+                                f"Waiting for Signal..."
+                            )
 
-        except Exception as e:
-            logger.error(f"Error in on_candle pipeline: {e}")
+            except Exception as e:
+                logger.error(f"Error in on_candle pipeline: {e}")
 
     return on_candle, trade_manager, risk_engine
 
@@ -98,6 +158,36 @@ def build_live_on_candle_handler(config_path: str = "config.yaml"):
     ticker = _create_stream(config, ws_handler)
 
     return config, on_candle, ws_handler, ticker
+
+
+def run_live_trading(config_path: str = "config.yaml"):
+    """Launch live trading: connect to stream and start processing real orders."""
+    config, on_candle, ws_handler, ticker = build_live_on_candle_handler(config_path)
+    logger = setup_logger()
+    broker_name = config.get("broker", {}).get("name", "kite").upper()
+    logger.info(f"=== LIVE TRADING MODE ({broker_name}) — REAL ORDERS ===")
+    logger.info("Press Ctrl+C to stop.")
+
+    # Kite ticker uses .connect(threaded=True), Breeze stream is already connected
+    if hasattr(ticker, "connect"):
+        ticker.connect(threaded=True)
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Live trading stopped by user.")
+    finally:
+        # Generate report on exit
+        try:
+            from tools.export_report import export_trades
+            from datetime import datetime
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            filename = f"live_trade_report_{today_str}.csv"
+            logger.info(f"Generating live session report: {filename}...")
+            export_trades(output_csv=filename, report_date=today_str)
+        except Exception as e:
+            logger.error(f"Failed to generate live report: {e}")
 
 
 def build_paper_trading_handler(config_path: str = "config.yaml"):
@@ -138,6 +228,17 @@ def run_paper_trading(config_path: str = "config.yaml"):
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Paper trading stopped by user.")
+    finally:
+        # Generate report on exit
+        try:
+            from tools.export_report import export_trades
+            from datetime import datetime
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            filename = f"paper_trade_report_{today_str}.csv"
+            logger.info(f"Generating session report: {filename}...")
+            export_trades(output_csv=filename, report_date=today_str)
+        except Exception as e:
+            logger.error(f"Failed to generate report: {e}")
 
 
 def main_stub_loop():
@@ -241,3 +342,10 @@ def main_stub_loop():
         ret_pct = (daily_pnl / config["account"]["initial_capital"]) * 100
         logger.info(f"  Return            : {ret_pct:+.2f}%")
     logger.info("=" * 50)
+
+    # Generate full report
+    try:
+        from tools.export_report import export_trades
+        export_trades(output_csv="backtest_report.csv")
+    except Exception as e:
+        logger.error(f"Failed to generate backtest report: {e}")

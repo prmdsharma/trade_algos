@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover
     TradeLogger = None  # type: ignore
 
 class TradeManager:
-    def __init__(self, config, broker, risk_engine: RiskEngine, order_manager: OrderManager):
+    def __init__(self, config, broker, risk_engine: RiskEngine, order_manager: OrderManager, trade_logger=None):
         self.config = config
         self.broker = broker
         self.risk_engine = risk_engine
@@ -26,11 +26,19 @@ class TradeManager:
         self.current_position = None
         self.logger = logging.getLogger(f"sensex_scalping.{__name__}")
 
+        # Visibility flag for recovery
+        self._first_run_after_recovery = False
+
         # Optional trade persistence
-        try:
-            self._trade_logger = TradeLogger() if TradeLogger else None
-        except Exception:
-            self._trade_logger = None
+        self._trade_logger = trade_logger
+        if self._trade_logger is None:
+            try:
+                self._trade_logger = TradeLogger() if TradeLogger else None
+            except Exception:
+                self._trade_logger = None
+
+        # Recovery Logic: Check for open trades on startup
+        self.recover_state()
 
     # ---- Liquidity validation (spec requirement) ----
 
@@ -116,7 +124,6 @@ class TradeManager:
             # Extended params for reporting
             'ema9': candle.get('EMA9'),
             'ema21': candle.get('EMA21'),
-            'vwap': candle.get('VWAP'),
             'spot_open': candle.get('open'),
             'spot_high': candle.get('high'),
             'spot_low': candle.get('low'),
@@ -152,11 +159,21 @@ class TradeManager:
         candle_for_exit = dict(candle)
         candle_for_exit['close'] = current_premium
 
-        # Provide real-time visibility for the open trade
+        # Provide real-time visibility for the open trade - Throttle to every 5 minutes
         entry_price = self.current_position['entry_price']
         pnl = (current_premium - entry_price) * self.current_position['qty']
         pct_change = ((current_premium - entry_price) / entry_price) * 100
-        self.logger.info(f"TRADING: {symbol} | Entry: {entry_price:.2f} | LTP: {current_premium:.2f} | PnL: {pnl:+.2f} ({pct_change:+.2f}%)")
+        
+        current_min = candle['time'].minute
+        if current_min % 5 == 0 or self._first_run_after_recovery:
+            target_val = entry_price * (1 + self.exit_engine.target_pct)
+            sl_val = entry_price * (1 - self.exit_engine.sl_pct)
+            self.logger.info(
+                f"ACTIVE TRADE: {symbol} | LTP: {current_premium:.2f} | "
+                f"Entry: {entry_price:.2f} | TGT: {target_val:.2f} | SL: {sl_val:.2f} | "
+                f"PnL: {pnl:+.2f} ({pct_change:+.2f}%)"
+            )
+            self._first_run_after_recovery = False
 
         # [cite_start]Check exit conditions [cite: 26]
         should_exit, reason = self.exit_engine.check_exit(self.current_position, candle_for_exit)
@@ -184,7 +201,6 @@ class TradeManager:
                 exit_params = {
                     'ema9': candle.get('EMA9'),
                     'ema21': candle.get('EMA21'),
-                    'vwap': candle.get('VWAP'),
                     'spot_open': candle.get('open'),
                     'spot_high': candle.get('high'),
                     'spot_low': candle.get('low'),
@@ -230,7 +246,6 @@ class TradeManager:
             exit_params = {
                 'ema9': candle.get('EMA9'),
                 'ema21': candle.get('EMA21'),
-                'vwap': candle.get('VWAP'),
                 'spot_open': candle.get('open'),
                 'spot_high': candle.get('high'),
                 'spot_low': candle.get('low'),
@@ -246,3 +261,29 @@ class TradeManager:
             )
 
         self.current_position = None
+
+    # ---- State Recovery ----
+
+    def recover_state(self):
+        """Check for open trades in the database and restore management state."""
+        if not self._trade_logger:
+            return
+
+        # 1. Recover Risk Metrics for today
+        from core.utils import get_today_date
+        today = get_today_date()
+        daily_stats = self._trade_logger.get_daily_stats(today)
+        self.risk_engine.recover_metrics(daily_stats)
+
+        # 2. Recover Open Position
+        open_trade = self._trade_logger.get_open_trade()
+        if open_trade:
+            self.current_position = open_trade
+            self._first_run_after_recovery = True
+            self.logger.info(
+                f"RECOVERY: Restored open position for {open_trade['symbol']} "
+                f"(ID: {open_trade['db_id']}) @ {open_trade['entry_price']}"
+            )
+            self.logger.info(f"RECOVERY: Resuming management of {open_trade['symbol']}...")
+        else:
+            self.logger.info("RECOVERY: No open trades found in database.")

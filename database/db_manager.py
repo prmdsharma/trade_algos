@@ -6,7 +6,7 @@ import logging
 import datetime
 from typing import Optional
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, and_
 from sqlalchemy.orm import sessionmaker
 
 from .models import Base, Trade
@@ -24,7 +24,7 @@ class TradeLogger:
         trade_logger.log_exit(position, ...)  # on exit
     """
 
-    def __init__(self, db_path: str = "trades.db"):
+    def __init__(self, db_path: str = "database/trades.db"):
         self.engine = create_engine(f"sqlite:///{db_path}", echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -45,7 +45,6 @@ class TradeLogger:
                 entry_vix=position.get("entry_vix"),
                 entry_ema9=position.get("ema9"),
                 entry_ema21=position.get("ema21"),
-                entry_vwap=position.get("vwap"),
                 entry_spot_open=position.get("spot_open"),
                 entry_spot_high=position.get("spot_high"),
                 entry_spot_low=position.get("spot_low"),
@@ -91,7 +90,6 @@ class TradeLogger:
                 trade.exit_vix = exit_params.get("vix")
                 trade.exit_ema9 = exit_params.get("ema9")
                 trade.exit_ema21 = exit_params.get("ema21")
-                trade.exit_vwap = exit_params.get("vwap")
                 trade.exit_spot_open = exit_params.get("spot_open")
                 trade.exit_spot_high = exit_params.get("spot_high")
                 trade.exit_spot_low = exit_params.get("spot_low")
@@ -102,5 +100,80 @@ class TradeLogger:
         except Exception as e:
             session.rollback()
             logger.error(f"Failed to log exit: {e}")
+        finally:
+            session.close()
+    def get_open_trade(self) -> Optional[dict]:
+        """
+        Check for a trade that was entered but not yet exited.
+        Returns a dictionary compatible with TradeManager.current_position or None.
+        """
+        session = self.Session()
+        try:
+            trade = session.query(Trade).filter(Trade.exit_time == None).order_by(Trade.entry_time.desc()).first()
+            if trade:
+                return {
+                    'db_id': trade.id,
+                    'type': trade.signal_type,
+                    'symbol': trade.symbol,
+                    'strike': trade.strike,
+                    'entry_price': trade.entry_price,
+                    'qty': trade.qty,
+                    # Restore spot params if available
+                    'ema9': trade.entry_ema9,
+                    'ema21': trade.entry_ema21,
+                    'spot_open': trade.entry_spot_open,
+                    'spot_high': trade.entry_spot_high,
+                    'spot_low': trade.entry_spot_low,
+                    'spot_close': trade.entry_spot_close,
+                    'entry_time': trade.entry_time,
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Failed to fetch open trade: {e}")
+            return None
+        finally:
+            session.close()
+
+    def get_daily_stats(self, date: datetime.date) -> dict:
+        """
+        Calculate daily metrics for RiskEngine recovery.
+        """
+        session = self.Session()
+        try:
+            start_of_day = datetime.datetime.combine(date, datetime.time.min)
+            end_of_day = datetime.datetime.combine(date, datetime.time.max)
+
+            # Query all trades completed today
+            trades = (
+                session.query(Trade)
+                .filter(
+                    and_(
+                        Trade.exit_time >= start_of_day,
+                        Trade.exit_time <= end_of_day
+                    )
+                )
+                .order_by(Trade.exit_time.asc())
+                .all()
+            )
+
+            total_pnl = sum(t.pnl for t in trades if t.pnl is not None)
+            total_trades = len(trades)
+            
+            # Calculate consecutive losses from the end of today's sequence
+            consecutive_losses = 0
+            for t in reversed(trades):
+                if t.pnl is not None and t.pnl < 0:
+                    consecutive_losses += 1
+                else:
+                    break  # Hit a win or a break in the sequence
+
+            return {
+                "daily_pnl": total_pnl,
+                "trades_today": total_trades,
+                "consecutive_losses": consecutive_losses
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch daily stats: {e}")
+            return {"daily_pnl": 0.0, "trades_today": 0, "consecutive_losses": 0}
         finally:
             session.close()

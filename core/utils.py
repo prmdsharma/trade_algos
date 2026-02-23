@@ -43,9 +43,10 @@ def get_next_weekly_expiry(as_of: Optional[_dt.date] = None) -> _dt.date:
 
 def format_kite_expiry(expiry: _dt.date) -> str:
     """
-    Format expiry as YYMON for Kite-style symbols, e.g. 2024-02-29 -> 24FEB.
+    Format expiry as YYMONDD for Kite-style symbols, e.g. 2024-02-29 -> 24FEB29.
     """
     year_short = str(expiry.year % 100).zfill(2)
     month_str = expiry.strftime("%b").upper()
-    return f"{year_short}{month_str}"
+    day_str = str(expiry.day).zfill(2)
+    return f"{year_short}{month_str}{day_str}"
 
