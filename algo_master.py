@@ -125,13 +125,14 @@ def deploy_strategy(name):
     )
     run_command(rsync_cmd)
     
-    # 3. Synchronize also the master script itself
-    rsync_master = (
-        f"rsync -avz -e 'ssh -i {REMOTE_CONFIG['ssh_key']}' "
-        f"{os.path.join(BASE_DIR, 'algo_master.py')} "
-        f"{REMOTE_CONFIG['user']}@{REMOTE_CONFIG['host']}:{REMOTE_CONFIG['remote_root']}/"
-    )
-    run_command(rsync_master)
+    # 3. Synchronize also the master script and config
+    for master_file in ['algo_master.py', 'strategies.yaml']:
+        rsync_master = (
+            f"rsync -avz -e 'ssh -i {REMOTE_CONFIG['ssh_key']}' "
+            f"{os.path.join(BASE_DIR, master_file)} "
+            f"{REMOTE_CONFIG['user']}@{REMOTE_CONFIG['host']}:{REMOTE_CONFIG['remote_root']}/"
+        )
+        run_command(rsync_master)
 
     # 4. Finalize on remote (pip install)
     remote_finalize = (
