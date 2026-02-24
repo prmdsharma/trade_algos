@@ -3,6 +3,8 @@ import sys
 import argparse
 import subprocess
 import datetime
+import time
+import json
 import yaml
 
 # Load strategies from configuration file
@@ -189,6 +191,44 @@ def start_strategy(name, mode=None):
 
     print(f"[{get_log_time()}] ✅ {name} started via PM2.")
 
+def watch_strategies(interval=60):
+    """
+    Acts as a watchdog: checks enabled strategies and restarts them if they are not running.
+    """
+    print(f"[{get_log_time()}] 👀 Watchdog active. Checking every {interval} seconds...")
+    
+    try:
+        while True:
+            for name, config in STRATEGIES.items():
+                if not config.get("enabled", False):
+                    continue
+                
+                # Check status via PM2
+                active_mode = config.get("mode", "paper")
+                pm2_name = config["pm2_paper"] if active_mode == "paper" else config["pm2_live"]
+                
+                # We use 'pm2 jlist' to get machine-readable status
+                result = subprocess.run("pm2 jlist", shell=True, capture_output=True, text=True)
+                
+                is_running = False
+                if result.returncode == 0:
+                    try:
+                        apps = json.loads(result.stdout)
+                        for app in apps:
+                            if app["name"] == pm2_name and app["pm2_env"]["status"] == "online":
+                                is_running = True
+                                break
+                    except Exception as e:
+                        print(f"[{get_log_time()}] ERROR: Failed to parse PM2 output: {e}")
+                
+                if not is_running:
+                    print(f"[{get_log_time()}] ⚠️ Strategy '{name}' ({pm2_name}) is NOT running. Restarting...")
+                    start_strategy(name)
+            
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print(f"\n[{get_log_time()}] 🛑 Watchdog stopped by user.")
+
 def stop_strategy(name):
     if name == "all":
         for s_name, config in STRATEGIES.items():
@@ -237,9 +277,10 @@ def show_status():
 
 def main():
     parser = argparse.ArgumentParser(description="AlgoMaster: Manage Trading Strategies")
-    parser.add_argument("command", nargs="?", choices=["start", "stop", "status", "report", "setup", "deploy"], help="Command to execute")
+    parser.add_argument("command", nargs="?", choices=["start", "stop", "status", "report", "setup", "deploy", "watch"], help="Command to execute")
     parser.add_argument("strategy", nargs="?", default="all", help="Strategy name or 'all'")
     parser.add_argument("--mode", choices=["paper", "live"], help="Mode for start command (overrides YAML)")
+    parser.add_argument("--interval", type=int, default=60, help="Interval for watch command in seconds")
 
     args = parser.parse_args()
 
@@ -255,6 +296,8 @@ def main():
         setup_strategy(args.strategy)
     elif args.command == "deploy":
         deploy_strategy(args.strategy)
+    elif args.command == "watch":
+        watch_strategies(args.interval)
 
 if __name__ == "__main__":
     main()
