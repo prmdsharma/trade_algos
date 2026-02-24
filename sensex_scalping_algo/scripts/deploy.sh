@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# [DEPRECATED] Legacy Deployment Script
+# PLEASE USE algo_master.py IN THE ROOT DIRECTORY INSTEAD.
+# Example: python3 ../algo_master.py deploy sensex_scalping
+
 # Configuration
 REMOTE_USER="ubuntu"
 REMOTE_HOST="80.225.201.34"
