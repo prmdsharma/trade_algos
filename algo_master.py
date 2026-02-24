@@ -137,7 +137,7 @@ def deploy_strategy(name):
     remote_finalize = (
         f"cd {remote_strat_dir} && "
         f"if [ ! -d \"venv\" ]; then python3 -m venv venv; fi && "
-        f"venv/bin/pip install -r requirements.txt"
+        f"venv/bin/python3 -m pip install -r requirements.txt"
     )
     run_command(f"{ssh_cmd} '{remote_finalize}'")
 
