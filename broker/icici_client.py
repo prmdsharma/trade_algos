@@ -104,10 +104,10 @@ class ICICIClientLive(BrokerBase):
         stock_code, strike_price, option_type, expiry = self._parse_symbol(symbol)
 
         # The Breeze API can occasionally return empty responses or JSON errors
-        # especially under load or transient network issues. We retry up to 3 times.
+        # especially under load or transient network issues. We retry up to 5 times.
         import time
         quotes = {}
-        for attempt in range(3):
+        for attempt in range(5):
             try:
                 quotes = self.breeze.get_quotes(
                     stock_code=stock_code,
@@ -124,15 +124,17 @@ class ICICIClientLive(BrokerBase):
                         return float(data[0].get("ltp", 0.0))
                 
                 # If we got a response but it's not "Success", log it and maybe retry
-                logger.warning(f"Breeze get_quotes attempt {attempt+1} unexpected response: {quotes}")
+                logger.info(f"Breeze get_quotes attempt {attempt+1} unexpected response (retrying): {quotes}")
             except Exception as e:
-                if "Expecting value" in str(e) and attempt < 2:
-                    logger.warning(f"Breeze API JSON error on attempt {attempt+1}, retrying... ({e})")
-                    time.sleep(0.5)
+                # 504 Gateway Timeout or empty response often causes JSON decode errors
+                if ("Expecting value" in str(e) or "504" in str(e)) and attempt < 4:
+                    log_level = logging.INFO if attempt < 2 else logging.WARNING
+                    logger.log(log_level, f"Breeze API transient error on attempt {attempt+1}, retrying... ({e})")
+                    time.sleep(0.5 * (attempt+1))
                     continue
-                raise ValueError(f"Could not fetch LTP for {symbol} after retries: {e}")
+                raise ValueError(f"Could not fetch LTP for {symbol} after {attempt+1} retries: {e}")
 
-        raise ValueError(f"Could not fetch LTP for {symbol}: {quotes}")
+        raise ValueError(f"Could not fetch LTP for {symbol} after 5 attempts: {quotes}")
 
     def get_historical_data(
         self,

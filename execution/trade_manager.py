@@ -42,24 +42,22 @@ class TradeManager:
 
     # ---- Liquidity validation (spec requirement) ----
 
-    def _validate_liquidity(self, symbol: str) -> bool:
+    def _validate_liquidity(self, symbol: str) -> tuple[bool, float]:
         """
         Basic liquidity gate before entry.
-
-        In live mode this should check bid-ask spread and/or volume.
-        For the stub it always passes because we don't have L2 data.
+        Returns (is_liquid, ltp).
         """
         try:
             ltp = self.broker.get_ltp(symbol)
             if ltp <= 0:
                 self.logger.warning(f"Liquidity check FAILED for {symbol}: LTP={ltp}")
-                return False
+                return False, 0.0
             self.logger.info(f"Liquidity check PASSED for {symbol}: LTP={ltp}")
-            return True
+            return True, ltp
         except Exception as e:
             self.logger.warning(f"Liquidity check SKIPPED for {symbol}: {e}")
-            # In backtest mode, allow trade even if LTP fetch fails
-            return True
+            # In backtest/error mode, allow trade even if LTP fetch fails (use 0.0 as marker)
+            return True, 0.0
 
     def _build_option_symbol(self, strike: int, option_type: str, as_of: Optional[datetime.date] = None) -> str:
         """
@@ -94,15 +92,20 @@ class TradeManager:
         option_symbol = self._build_option_symbol(strike, signal_type, as_of=candle_date)
 
         # Spec: validate liquidity before placing an order
-        if not self._validate_liquidity(option_symbol):
+        is_liquid, ltp_liquidity = self._validate_liquidity(option_symbol)
+        if not is_liquid:
             self.logger.warning(f"Skipping entry due to liquidity for {option_symbol}")
             return
 
-        try:
-            premium_price = self.broker.get_ltp(option_symbol)
-        except Exception:
-            # Fallback: simple proxy based on spot (for dev/backtest)
-            premium_price = spot_price * 0.005
+        # Use LTP from liquidity check if possible to save an API call
+        if ltp_liquidity > 0:
+            premium_price = ltp_liquidity
+        else:
+            try:
+                premium_price = self.broker.get_ltp(option_symbol)
+            except Exception:
+                # Fallback: simple proxy based on spot (for dev/backtest)
+                premium_price = spot_price * 0.005
 
         # [cite_start]3. Size Position [cite: 31]
         qty = self.sizer.calculate_qty(premium_price)
