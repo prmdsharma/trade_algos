@@ -13,6 +13,7 @@ import pandas as pd
 from typing import Any, Dict
 
 logger = logging.getLogger(f"sensex_scalping.{__name__}")
+# logger.setLevel(logging.DEBUG)  # Keep commented out for future use if needed
 
 try:
     from breeze_connect import BreezeConnect  # type: ignore
@@ -53,10 +54,20 @@ def create_icici_stream(config: Dict[str, Any], ws_handler: Any):
     def on_ticks(tick_data: Dict[str, Any]):
         """Adapter: transform Breeze tick format to our handler format."""
         try:
-            # Breeze live ticks use different keys than historical/quotes
+            # Breeze ticks often use a Unix timestamp or naive UTC-like string
+            # We must normalize to IST to match the RiskEngine windows
+            raw_time = pd.to_datetime(tick_data.get("ltt"))
+            if raw_time.tzinfo is None:
+                # If naive, we assuming it's UTC (as seen in logs) and convert to IST
+                from core.utils import IST
+                tick_time = raw_time.tz_localize('UTC').tz_convert(IST).replace(tzinfo=None)
+            else:
+                from core.utils import IST
+                tick_time = raw_time.tz_convert(IST).replace(tzinfo=None)
+
             tick = {
                 "last_price": float(tick_data.get("last", 0)),
-                "time": pd.to_datetime(tick_data.get("ltt")),
+                "time": tick_time,
                 "volume": int(tick_data.get("ttq", 0)) if tick_data.get("ttq") else 0,
             }
             

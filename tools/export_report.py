@@ -48,8 +48,8 @@ def export_trades(db_path="database/trades.db", output_csv="backtest_report.csv"
             exit_ts = pd.to_datetime(trade['exit_time']) if trade['exit_time'] else None
             exit_rec = {
                 'Index': f"{trade['id']}.1",
-                'Date': exit_ts.strftime('%Y-%m-%d') if exit_ts else None,
-                'Time': exit_ts.strftime('%H:%M:%S') if exit_ts else "OPEN",
+                'Date': exit_ts.strftime('%Y-%m-%d') if pd.notnull(exit_ts) else None,
+                'Time': exit_ts.strftime('%H:%M:%S') if pd.notnull(exit_ts) else "OPEN",
                 'Type': trade['signal_type'],
                 'B/S': 'Sell',
                 'Strike': trade['strike'],

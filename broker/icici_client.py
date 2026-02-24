@@ -103,19 +103,35 @@ class ICICIClientLive(BrokerBase):
         """
         stock_code, strike_price, option_type, expiry = self._parse_symbol(symbol)
 
-        quotes = self.breeze.get_quotes(
-            stock_code=stock_code,
-            exchange_code="BFO",
-            product_type="Options",
-            right=option_type.lower(),
-            strike_price=str(strike_price),
-            expiry_date=expiry,
-        )
+        # The Breeze API can occasionally return empty responses or JSON errors
+        # especially under load or transient network issues. We retry up to 3 times.
+        import time
+        quotes = {}
+        for attempt in range(3):
+            try:
+                quotes = self.breeze.get_quotes(
+                    stock_code=stock_code,
+                    exchange_code="BFO",
+                    product_type="Options",
+                    right=option_type.lower(),
+                    strike_price=str(strike_price),
+                    expiry_date=expiry,
+                )
 
-        if quotes and "Success" in quotes:
-            data = quotes["Success"]
-            if isinstance(data, list) and len(data) > 0:
-                return float(data[0].get("ltp", 0.0))
+                if quotes and "Success" in quotes:
+                    data = quotes["Success"]
+                    if isinstance(data, list) and len(data) > 0:
+                        return float(data[0].get("ltp", 0.0))
+                
+                # If we got a response but it's not "Success", log it and maybe retry
+                logger.warning(f"Breeze get_quotes attempt {attempt+1} unexpected response: {quotes}")
+            except Exception as e:
+                if "Expecting value" in str(e) and attempt < 2:
+                    logger.warning(f"Breeze API JSON error on attempt {attempt+1}, retrying... ({e})")
+                    time.sleep(0.5)
+                    continue
+                raise ValueError(f"Could not fetch LTP for {symbol} after retries: {e}")
+
         raise ValueError(f"Could not fetch LTP for {symbol}: {quotes}")
 
     def get_historical_data(

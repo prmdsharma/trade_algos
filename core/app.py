@@ -50,15 +50,18 @@ def _build_on_candle_pipeline(config, broker, logger):
 
     # Bootstrap historical data for accurate indicators (EMA9, EMA21)
     try:
-        from datetime import datetime, timedelta
-        now = datetime.now()
-        # Fetch last 6 hours to ensure we get plenty of data for indicator stability
-        from_date = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        to_date = now.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        import datetime
+        from core.utils import get_now_ist
+        now = get_now_ist()
+        # Fetch last 12 hours (instead of 6) to cross day boundaries if needed
+        # and ensure we get enough data even early in the morning.
+        from_date_dt = now - datetime.timedelta(hours=12)
+        from_date = from_date_dt.strftime("%Y-%m-%dT%H:%M:%S")
+        to_date = now.strftime("%Y-%m-%dT%H:%M:%S")
         
         # SENSEX index code is BSESEN
         index_symbol = config.get("strategy", {}).get("index_symbol", "BSESEN")
-        logger.info(f"Bootstrapping historical data for {index_symbol} (last 6 hours)...")
+        logger.info(f"Bootstrapping historical data for {index_symbol} since {from_date} (IST)...")
         
         hist_data = broker.get_historical_data(
             symbol=index_symbol,
@@ -146,7 +149,7 @@ def build_live_on_candle_handler(config_path: str = "config.yaml"):
     Broker is selected from config['broker']['name'] (kite or icici).
     """
     config = load_config(config_path)
-    logger = setup_logger()
+    logger = setup_logger(log_filename="trading_live.log")
 
     broker = create_broker(config, mode="live")
 
@@ -197,7 +200,7 @@ def build_paper_trading_handler(config_path: str = "config.yaml"):
     Broker is selected from config['broker']['name'] (kite or icici).
     """
     config = load_config(config_path)
-    logger = setup_logger()
+    logger = setup_logger(log_filename="trading_paper.log")
 
     broker = create_broker(config, mode="paper")
 

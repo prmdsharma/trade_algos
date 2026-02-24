@@ -56,10 +56,15 @@ class RiskEngine:
         """
         Checks whether the given time falls within a trading window.
 
-        In live mode, uses datetime.now().  In backtest mode, pass the
+        In live mode, uses get_now_ist().time(). In backtest mode, pass the
         candle's timestamp so the check is deterministic.
         """
-        now = candle_time or datetime.datetime.now().time()
+        if candle_time:
+            now = candle_time
+        else:
+            from core.utils import get_now_ist
+            now = get_now_ist().time()
+
         m_start = datetime.datetime.strptime(
             self.cfg["windows"]["morning_start"], "%H:%M"
         ).time()
@@ -81,7 +86,12 @@ class RiskEngine:
 
         Pass candle_time for backtest determinism.
         """
-        now = candle_time or datetime.datetime.now().time()
+        if candle_time:
+            now = candle_time
+        else:
+            from core.utils import get_now_ist
+            now = get_now_ist().time()
+
         a_end = datetime.datetime.strptime(
             self.cfg["windows"]["afternoon_end"], "%H:%M"
         ).time()

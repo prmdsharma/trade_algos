@@ -8,14 +8,25 @@ from typing import Tuple, Optional
 from .constants import TIME_FORMAT_HM
 
 
+import pytz
+
+# Constants
+IST = pytz.timezone('Asia/Kolkata')
+
+
 def parse_time_hm(value: str) -> _dt.time:
     """Parse a HH:MM time string into a time object."""
     return _dt.datetime.strptime(value, TIME_FORMAT_HM).time()
 
 
+def get_now_ist() -> _dt.datetime:
+    """Return the current time in IST."""
+    return _dt.datetime.now(IST)
+
+
 def get_today_date() -> _dt.date:
-    """Return today's date (exchange calendar naive)."""
-    return _dt.date.today()
+    """Return today's date in IST."""
+    return get_now_ist().date()
 
 
 def compute_pct_change(old: float, new: float) -> float:

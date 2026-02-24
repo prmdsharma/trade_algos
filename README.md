@@ -184,4 +184,22 @@ Algorithmic trading requires resilience against technical glitches. The system i
 python -m pytest tests/ -v
 ```
 
+### Deployment
+
+To deploy the system to the production server:
+
+1. Ensure you are on the `master` branch.
+2. Run the deployment script with the desired mode (`live` or `paper`):
+   ```bash
+   # Deploy for live trading (default)
+   ./scripts/deploy.sh live
+
+   # Deploy for paper trading in the background
+   ./scripts/deploy.sh paper
+   ```
+
+The script will sync the codebase to the production server using `rsync` and restart the process via `PM2`. 
+- **Live Mode**: Uses PM2 name `sensex-scalper`.
+- **Paper Mode**: Uses PM2 name `sensex-paper`.
+
 > **⚠️ Warning:** Live trading involves real financial risk. Always paper trade first, verify option symbol formats against Kite's `instruments.csv`, and validate all logic before enabling real capital.

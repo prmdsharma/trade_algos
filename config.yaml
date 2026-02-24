@@ -5,7 +5,7 @@ account:
   initial_capital: 500000        # Starting capital (Rs)
 
 risk:
-  max_trades_per_day: 999          # Effective removal as requested
+  max_trades_per_day: 7          # Effective removal as requested
   max_consecutive_losses: 3
   daily_loss_limit_pct: 0.03     # 3% of capital
   risk_per_trade_pct: 0.01       # 1% of capital
