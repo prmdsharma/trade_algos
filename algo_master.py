@@ -3,18 +3,28 @@ import sys
 import argparse
 import subprocess
 import datetime
+import yaml
 
-# Configuration for strategies
-STRATEGIES = {
-    "sensex_scalping": {
-        "path": "sensex_scalping_algo",
-        "live_script": "live_trade.py",
-        "paper_script": "paper_trade.py",
-        "pm2_live": "sensex-scalper",
-        "pm2_paper": "sensex-paper",
-        "report_tool": "tools/export_report.py"
-    }
-}
+# Load strategies from configuration file
+def load_strategies():
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "strategies.yaml")
+    if not os.path.exists(config_path):
+        # Fallback/Default for compatibility during migration
+        return {
+            "sensex_scalping": {
+                "enabled": True,
+                "path": "sensex_scalping_algo",
+                "live_script": "live_trade.py",
+                "paper_script": "paper_trade.py",
+                "pm2_live": "sensex-scalper",
+                "pm2_paper": "sensex-paper",
+                "report_tool": "tools/export_report.py"
+            }
+        }
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
+
+STRATEGIES = load_strategies()
 
 # Production server configuration
 REMOTE_CONFIG = {
@@ -52,8 +62,9 @@ def run_command(command, cwd=None, capture=False, verbose=True):
 def setup_strategy(name):
     """Set up virtual environment and install dependencies."""
     if name == "all":
-        for s_name in STRATEGIES:
-            setup_strategy(s_name)
+        for s_name, config in STRATEGIES.items():
+            if config.get("enabled", False):
+                setup_strategy(s_name)
         return
 
     if name not in STRATEGIES:
@@ -81,8 +92,9 @@ def setup_strategy(name):
 def deploy_strategy(name):
     """Deploy strategy to production server."""
     if name == "all":
-        for s_name in STRATEGIES:
-            deploy_strategy(s_name)
+        for s_name, config in STRATEGIES.items():
+            if config.get("enabled", False):
+                deploy_strategy(s_name)
         return
 
     if name not in STRATEGIES:
@@ -133,8 +145,9 @@ def deploy_strategy(name):
 
 def start_strategy(name, mode="paper"):
     if name == "all":
-        for s_name in STRATEGIES:
-            start_strategy(s_name, mode)
+        for s_name, config in STRATEGIES.items():
+            if config.get("enabled", False):
+                start_strategy(s_name, mode)
         return
 
     if name not in STRATEGIES:
@@ -171,8 +184,9 @@ def start_strategy(name, mode="paper"):
 
 def stop_strategy(name):
     if name == "all":
-        for s_name in STRATEGIES:
-            stop_strategy(s_name)
+        for s_name, config in STRATEGIES.items():
+            if config.get("enabled", False):
+                stop_strategy(s_name)
         return
 
     if name not in STRATEGIES:
@@ -194,8 +208,9 @@ def stop_strategy(name):
 
 def generate_report(name):
     if name == "all":
-        for s_name in STRATEGIES:
-            generate_report(s_name)
+        for s_name, config in STRATEGIES.items():
+            if config.get("enabled", False):
+                generate_report(s_name)
         return
 
     strategy = STRATEGIES[name]

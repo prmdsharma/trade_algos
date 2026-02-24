@@ -1,0 +1,21 @@
+# Strategy Registry
+# Use this file to enable/disable strategies for automation.
+
+sensex_scalping:
+  enabled: true
+  path: "sensex_scalping_algo"
+  live_script: "live_trade.py"
+  paper_script: "paper_trade.py"
+  pm2_live: "sensex-scalper"
+  pm2_paper: "sensex-paper"
+  report_tool: "tools/export_report.py"
+
+# Example of a disabled strategy
+# nifty_scalping:
+#   enabled: false
+#   path: "nifty_scalping_algo"
+#   live_script: "live_trade.py"
+#   paper_script: "paper_trade.py"
+#   pm2_live: "nifty-scalper"
+#   pm2_paper: "nifty-paper"
+#   report_tool: "tools/export_report.py"
