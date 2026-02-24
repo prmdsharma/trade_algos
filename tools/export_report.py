@@ -35,10 +35,9 @@ def export_trades(db_path="database/trades.db", output_csv="backtest_report.csv"
                 'Qty': trade['qty'],
                 'Price': trade['entry_price'],
                 'Event': 'ENTRY',
+                'Spot': trade['entry_spot_close'],
                 'EMA9': trade['entry_ema9'],
                 'EMA21': trade['entry_ema21'],
-                'Spot_High': trade['entry_spot_high'],
-                'Spot_Low': trade['entry_spot_low'],
                 'P/L': None,
                 'Exit_Reason': None
             }
@@ -56,10 +55,9 @@ def export_trades(db_path="database/trades.db", output_csv="backtest_report.csv"
                 'Qty': trade['qty'],
                 'Price': trade['exit_price'] if trade['exit_price'] else "OPEN",
                 'Event': 'EXIT',
+                'Spot': trade['exit_spot_close'] if trade['exit_spot_close'] else "OPEN",
                 'EMA9': trade['exit_ema9'],
                 'EMA21': trade['exit_ema21'],
-                'Spot_High': trade['exit_spot_high'],
-                'Spot_Low': trade['exit_spot_low'],
                 'P/L': trade['pnl'] if trade['pnl'] is not None else "OPEN",
                 'Exit_Reason': trade['exit_reason'] if trade['exit_reason'] else "OPEN"
             }
@@ -73,7 +71,8 @@ def export_trades(db_path="database/trades.db", output_csv="backtest_report.csv"
         
         # Print a concise summary report
         print("\n=== ENHANCED TRADE REPORT ===")
-        print(df_final[["Index", "Time", "Event", "Type", "Price", "P/L", "Exit_Reason"]].to_string(index=False))
+        cols = ["Index", "Time", "Event", "Type", "Price", "Spot", "EMA9", "EMA21", "P/L", "Exit_Reason"]
+        print(df_final[cols].to_string(index=False))
         print(f"\nTotal Net P&L: ₹{df_raw['pnl'].sum():.2f}")
         
     finally:
