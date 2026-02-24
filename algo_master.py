@@ -173,8 +173,8 @@ def start_strategy(name, mode=None):
     
     # 2. Check PM2
     python_path = os.path.join(strat_dir, "venv", "bin", "python")
-    # Use --cwd to ensure PM2 tracks the correct path
-    start_cmd = f"pm2 start '{python_path} {script}' --name {pm2_name} --cwd {strat_dir}"
+    # Use --interpreter to avoid bash wrapping and ensure correct venv
+    start_cmd = f"pm2 start {script} --interpreter {python_path} --name {pm2_name} --cwd {strat_dir}"
     
     pm2_exists = run_command(f"pm2 describe {pm2_name}", capture=True, verbose=False)
     if pm2_exists:
@@ -255,9 +255,6 @@ def main():
         setup_strategy(args.strategy)
     elif args.command == "deploy":
         deploy_strategy(args.strategy)
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
