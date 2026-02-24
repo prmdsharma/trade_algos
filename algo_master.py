@@ -72,7 +72,7 @@ def setup_strategy(name):
         return
 
     strategy = STRATEGIES[name]
-    strat_dir = os.path.join(BASE_DIR, strategy["path"])
+    strat_dir = os.path.join(BASE_DIR, str(strategy["path"]))
     
     print(f"[{get_log_time()}] 📦 Setting up {name}...")
     
@@ -102,8 +102,8 @@ def deploy_strategy(name):
         return
 
     strategy = STRATEGIES[name]
-    local_strat_dir = os.path.join(BASE_DIR, strategy["path"])
-    remote_strat_dir = os.path.join(REMOTE_CONFIG["remote_root"], strategy["path"])
+    local_strat_dir = os.path.join(BASE_DIR, str(strategy["path"]))
+    remote_strat_dir = os.path.join(str(REMOTE_CONFIG["remote_root"]), str(strategy["path"]))
     
     print(f"[{get_log_time()}] ⬆️ Deploying {name} to {REMOTE_CONFIG['host']}...")
     
@@ -143,11 +143,13 @@ def deploy_strategy(name):
 
     print(f"[{get_log_time()}] ✅ Deployment complete for {name}.")
 
-def start_strategy(name, mode="paper"):
+def start_strategy(name, mode=None):
     if name == "all":
         for s_name, config in STRATEGIES.items():
             if config.get("enabled", False):
-                start_strategy(s_name, mode)
+                # Use strategy-specific mode if provided, else fall back
+                s_mode = mode or config.get("mode", "paper")
+                start_strategy(s_name, s_mode)
         return
 
     if name not in STRATEGIES:
@@ -155,11 +157,15 @@ def start_strategy(name, mode="paper"):
         return
 
     strategy = STRATEGIES[name]
-    strat_dir = os.path.join(BASE_DIR, strategy["path"])
-    script = strategy["paper_script"] if mode == "paper" else strategy["live_script"]
-    pm2_name = strategy["pm2_paper"] if mode == "paper" else strategy["pm2_live"]
+    strat_dir = os.path.join(BASE_DIR, str(strategy["path"]))
     
-    print(f"[{get_log_time()}] 🚀 Starting {name} in {mode} mode...")
+    # Mode priority: 1. CLI Argument, 2. Strategy Config, 3. Default (paper)
+    active_mode = mode or strategy.get("mode", "paper")
+    
+    script = strategy["paper_script"] if active_mode == "paper" else strategy["live_script"]
+    pm2_name = strategy["pm2_paper"] if active_mode == "paper" else strategy["pm2_live"]
+    
+    print(f"[{get_log_time()}] 🚀 Starting {name} in {active_mode} mode...")
     
     # 1. Sync latest code (local)
     # run_command("git pull origin master", cwd=strat_dir)
@@ -230,18 +236,18 @@ def show_status():
 
 def main():
     parser = argparse.ArgumentParser(description="AlgoMaster: Manage Trading Strategies")
-    parser.add_argument("command", choices=["start", "stop", "status", "report", "setup", "deploy"], help="Command to execute")
+    parser.add_argument("command", nargs="?", choices=["start", "stop", "status", "report", "setup", "deploy"], help="Command to execute")
     parser.add_argument("strategy", nargs="?", default="all", help="Strategy name or 'all'")
-    parser.add_argument("--mode", choices=["paper", "live"], default="paper", help="Mode for start command")
+    parser.add_argument("--mode", choices=["paper", "live"], help="Mode for start command (overrides YAML)")
 
     args = parser.parse_args()
 
-    if args.command == "start":
+    if not args.command or args.command == "status":
+        show_status()
+    elif args.command == "start":
         start_strategy(args.strategy, args.mode)
     elif args.command == "stop":
         stop_strategy(args.strategy)
-    elif args.command == "status":
-        show_status()
     elif args.command == "report":
         generate_report(args.strategy)
     elif args.command == "setup":

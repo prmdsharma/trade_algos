@@ -3,6 +3,7 @@
 
 sensex_scalping:
   enabled: true
+  mode: paper
   path: "sensex_scalping_algo"
   live_script: "live_trade.py"
   paper_script: "paper_trade.py"
