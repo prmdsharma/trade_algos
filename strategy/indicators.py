@@ -11,4 +11,4 @@ class IndicatorEngine:
         df['EMA21'] = df['close'].ewm(span=21, adjust=False).mean()
         
         
-        return df.iloc[-1] # Return latest row
+        return df

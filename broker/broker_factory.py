@@ -50,9 +50,12 @@ def _create_kite(config: Dict[str, Any], mode: str) -> BrokerBase:
 
 
 def _create_icici(config: Dict[str, Any], mode: str) -> BrokerBase:
-    from .icici_client import ICICIClientLive, ICICIClientPaper
-
-    if mode == "paper":
+    if mode == "stub":
+        from .kite_client import KiteClientStub
+        return KiteClientStub(config)
+    elif mode == "paper":
+        from .icici_client import ICICIClientPaper
         return ICICIClientPaper(config)
     else:
+        from .icici_client import ICICIClientLive
         return ICICIClientLive(config)

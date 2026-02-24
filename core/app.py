@@ -87,7 +87,8 @@ def _build_on_candle_pipeline(config, broker, logger):
             
             # Show initial values to user
             df_boot = pd.DataFrame(candles_history)
-            initial_enriched = indicators.calculate(df_boot)
+            df_initial = indicators.calculate(df_boot)
+            initial_enriched = df_initial.iloc[-1]
             logger.info(f"Bootstrapped {len(candles_history)} historical candles (6 hours).")
             logger.info(
                 f"Initial Indicators -> EMA9: {initial_enriched['EMA9']:.2f} | "
@@ -112,14 +113,16 @@ def _build_on_candle_pipeline(config, broker, logger):
                 if not risk_engine.is_trading_window_open(candle['time'].time()):
                     return
 
-                enriched_row = indicators.calculate(df)
+                df_enriched = indicators.calculate(df)
+                enriched_row = df_enriched.iloc[-1]
+                
                 trade_manager.manage_open_positions(enriched_row)
 
                 if not risk_engine.can_trade():
                     logger.warning("Risk limits breached. No new entries for the day.")
                     return
 
-                signal = signal_engine.analyze(enriched_row)
+                signal = signal_engine.analyze(df_enriched)
 
                 if signal:
                     trade_manager.execute_entry(signal, enriched_row)
@@ -293,7 +296,8 @@ def main_stub_loop():
             if candle_time and not risk_engine.is_trading_window_open(candle_time):
                 continue
 
-            enriched_data = indicators.calculate(tick_data)
+            df_enriched = indicators.calculate(tick_data)
+            enriched_data = df_enriched.iloc[-1]
 
             # Carry candle time into the enriched dict for ExitEngine
             if candle_time:
@@ -308,7 +312,7 @@ def main_stub_loop():
                 # We still want to see the candles to trigger day changes/exits
                 pass
 
-            signal = signal_engine.analyze(enriched_data)
+            signal = signal_engine.analyze(df_enriched)
 
             if signal:
                 prev_trades = risk_engine.trades_today
